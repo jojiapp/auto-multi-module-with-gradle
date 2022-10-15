@@ -1,0 +1,92 @@
+rootProject.name = 'multi-module-test'
+
+def modules = [
+        "domain",
+        "web",
+        "server"
+]
+
+modules.forEach(module -> {
+
+    def moduleDir = file(rootDir, "${rootProject.name}-${module}")
+    if (!moduleDir.exists()) {
+        moduleDir.mkdirs()
+    }
+
+    makeModules(moduleDir)
+
+})
+
+private void makeModules(final File moduleDir, final String parentDirNames = "") {
+
+    for (final def subModule in moduleDir.listFiles()) {
+        if (subModule.file) {
+            continue
+        }
+
+        if (isModuleDir(subModule)) {
+            makeModules(subModule, "${parentDirNames}:${moduleDir.name}")
+            continue
+        }
+
+        makeBuildGradleFile(subModule)
+        markSrcDir(subModule)
+        includeModule(parentDirNames, moduleDir, subModule)
+
+    }
+}
+
+private void makeBuildGradleFile(final File subModule) {
+
+    def subModuleDir = file(subModule, "build.gradle")
+    if (!subModuleDir.exists()) {
+        subModuleDir.text = getDefaultGradleSetting()
+    }
+}
+
+private static String getDefaultGradleSetting() {
+    return """dependencies {
+    
+}
+
+bootJar { enabled = false }
+jar { enabled = true }
+
+"""
+}
+
+private void markSrcDir(subModule) {
+
+    ["src/main/java/com/jojiapp/multimoduletest",
+     "src/main/resources",
+     "src/test/java/com/jojiapp/multimoduletest",
+     "src/test/resources"
+    ].forEach(src -> {
+        def srcDir = file(subModule, src)
+        if (!srcDir.exists()) {
+            srcDir.mkdirs()
+        }
+    })
+}
+
+private File file(final File dir, final String name) {
+
+    return file("${dir.absolutePath}/${name}")
+}
+
+private void includeModule(
+        final String parentDirNames,
+        final File moduleDir,
+        final File subModule
+) {
+
+    def projectName = "${parentDirNames}:${moduleDir.name}:${subModule.name}"
+    include projectName
+    project(projectName).projectDir = subModule
+}
+
+private static boolean isModuleDir(final File subModule) {
+
+    return subModule.listFiles().size() != 0 && !subModule.list().contains("src")
+}
+

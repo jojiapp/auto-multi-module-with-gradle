@@ -1,0 +1,44 @@
+buildscript {
+    ext {
+        spring = "org.springframework"
+        boot = "${spring}.boot"
+        bootVersion = "2.7.4"
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath "$boot:spring-boot-gradle-plugin:$bootVersion"
+    }
+}
+
+allprojects {
+
+    apply plugin: "java-library"
+    apply plugin: boot
+    apply plugin: "io.spring.dependency-management"
+
+    group "com.jojiapp"
+    version = '0.0.1-SNAPSHOT'
+    sourceCompatibility = '17'
+}
+
+subprojects {
+
+    dependencies {
+        implementation 'org.springframework.boot:spring-boot-starter'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    }
+
+
+    repositories {
+        mavenCentral()
+    }
+
+    tasks.named('test') {
+        useJUnitPlatform()
+    }
+
+}
