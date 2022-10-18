@@ -30,7 +30,7 @@ private void makeModules(final File moduleDir, final String parentDirNames = "")
         }
 
         makeBuildGradleFile(subModule)
-        markSrcDir(subModule)
+        makeSrcDir(subModule)
         includeModule(parentDirNames, moduleDir, subModule)
 
     }
@@ -55,7 +55,7 @@ jar { enabled = true }
 """
 }
 
-private void markSrcDir(subModule) {
+private void makeSrcDir(subModule) {
 
     ["src/main/java/com/jojiapp/multimoduletest",
      "src/main/resources",
