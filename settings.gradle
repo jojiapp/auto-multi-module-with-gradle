@@ -26,6 +26,7 @@ private void makeModules(final File moduleDir, final String parentDirNames = "")
 
         if (isModuleDir(subModule)) {
             makeModules(subModule, "${parentDirNames}:${moduleDir.name}")
+            includeModule(parentDirNames, moduleDir, subModule)
             continue
         }
 
