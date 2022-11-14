@@ -19,7 +19,7 @@
 ### 전체 로직
 
 ```groovy
-rootProject.name = 'multi-module-test'
+rootProject.name = 'auto-multi-module-with-gradle'
 
 def modules = [
         "domain",
@@ -29,13 +29,13 @@ def modules = [
 
 modules.forEach(module -> {
 
-    def moduleDir = file(rootDir, "${rootProject.name}-${module}")
+    def modulePrefix = rootProject.name
+    def moduleDir = file(rootDir, "${modulePrefix}-${module}")
     if (!moduleDir.exists()) {
         moduleDir.mkdirs()
     }
 
     makeModules(moduleDir)
-
 })
 
 private void makeModules(final File moduleDir, final String parentDirNames = "") {
@@ -46,8 +46,7 @@ private void makeModules(final File moduleDir, final String parentDirNames = "")
         }
 
         if (isModuleDir(subModule)) {
-            makeModules(subModule, "${parentDirNames}:${moduleDir.name}")
-            includeModule(parentDirNames, moduleDir, subModule)
+            makeModules(subModule, "${parentDirNames}-${moduleDir.name}")
             continue
         }
 
@@ -56,6 +55,11 @@ private void makeModules(final File moduleDir, final String parentDirNames = "")
         includeModule(parentDirNames, moduleDir, subModule)
 
     }
+}
+
+private static boolean isModuleDir(final File subModule) {
+
+    return subModule.listFiles().size() != 0 && !subModule.list().contains("src")
 }
 
 private void makeBuildGradleFile(final File subModule) {
@@ -73,15 +77,15 @@ private static String getDefaultGradleSetting() {
 
 bootJar { enabled = false }
 jar { enabled = true }
-
 """
 }
 
 private void makeSrcDir(subModule) {
 
-    ["src/main/java/com/jojiapp/multimoduletest",
+    def group = "com/jojiapp"
+    ["src/main/java/${group}",
      "src/main/resources",
-     "src/test/java/com/jojiapp/multimoduletest",
+     "src/test/java/${group}",
      "src/test/resources"
     ].forEach(src -> {
         def srcDir = file(subModule, src)
@@ -102,9 +106,46 @@ private void includeModule(
         final File subModule
 ) {
 
-    def projectName = "${parentDirNames}:${moduleDir.name}:${subModule.name}"
+    def projectName = getModuleName(parentDirNames, moduleDir, subModule)
     include projectName
     project(projectName).projectDir = subModule
+}
+
+private static String getModuleName(
+        String parentDirNames,
+        File moduleDir,
+        File subModule
+) {
+
+    def firstDashIndex = 1
+    return ":" + "${parentDirNames}-${moduleDir.name}-${subModule.name}".substring(firstDashIndex)
+}
+```
+
+대부분 폴더를 생성하는 로직이라 특별한 것은 없습니다.
+
+## 자세히 살펴보기
+
+### 모듈이 될 폴더 인식 및 지정
+
+```groovy
+private void makeModules(final File moduleDir, final String parentDirNames = "") {
+
+    for (final def subModule in moduleDir.listFiles()) {
+        if (subModule.file) {
+            continue
+        }
+
+        if (isModuleDir(subModule)) {
+            makeModules(subModule, "${parentDirNames}-${moduleDir.name}")
+            continue
+        }
+
+        makeBuildGradleFile(subModule)
+        makeSrcDir(subModule)
+        includeModule(parentDirNames, moduleDir, subModule)
+
+    }
 }
 
 private static boolean isModuleDir(final File subModule) {
@@ -113,7 +154,62 @@ private static boolean isModuleDir(final File subModule) {
 }
 ```
 
-대부분 폴더를 생성하는 로직이라 특별한 것은 없습니다.
+현재 폴더 내에 파일이 존재하며, `src`폴더가 존재하지 않는다면 모듈입니다.
+하지만 해당 폴더 내의 또 폴더가 존재한다면 제일 안쪽에 위치한 폴더가 모듈이 되어야 하므로 재귀로 실행시켰습니다.
+
+또한 `"${parentDirNames}-${moduleDir.name}"`이 부분을 통해 
+`상위 폴더명들-현재 모듈이름`으로 모듈명을 지정하도록 하였습니다.
+
+### build.gradle 파일 생성
+
+```groovy
+private void makeBuildGradleFile(final File subModule) {
+
+    def subModuleDir = file(subModule, "build.gradle")
+    if (!subModuleDir.exists()) {
+        subModuleDir.text = getDefaultGradleSetting()
+    }
+}
+
+private static String getDefaultGradleSetting() {
+    return """dependencies {
+
+}
+
+bootJar { enabled = false }
+jar { enabled = true }
+"""
+}
+```
+
+기본적으로 모듈은 `build.gradle`이 존재해야 하므로, `build.gradle`을 만들어 줍니다.
+이때, 공통으로 들어갈 내용도 추가하여 줍니다.
+
+서버 모듈은 직접 `build.gradle`파일에서 `bootJar { enabled = false }`, `jar { enabled = true }`를 제거해야 합니다.
+
+### 모듈에 들어갈 기본 패키지 구조 생성
+
+```groovy
+private void makeSrcDir(subModule) {
+
+    def group = "com/jojiapp"
+    ["src/main/java/${group}",
+     "src/main/resources",
+     "src/test/java/${group}",
+     "src/test/resources"
+    ].forEach(src -> {
+        def srcDir = file(subModule, src)
+        if (!srcDir.exists()) {
+            srcDir.mkdirs()
+        }
+    })
+}
+
+private File file(final File dir, final String name) {
+
+  return file("${dir.absolutePath}/${name}")
+}
+```
 
 ### 폴더를 모듈로 인식시키기
 
@@ -124,48 +220,31 @@ private void includeModule(
         final File subModule
 ) {
 
-    def projectName = "${parentDirNames}:${moduleDir.name}:${subModule.name}"
-    include projectName
-    project(projectName).projectDir = subModㅋule
+  def projectName = getModuleName(parentDirNames, moduleDir, subModule)
+  include projectName
+  project(projectName).projectDir = subModule
 }
 
-private static boolean isModuleDir(final File subModule) {
+private static String getModuleName(
+        String parentDirNames,
+        File moduleDir,
+        File subModule
+) {
 
-    return subModule.listFiles().size() != 0 && !subModule.list().contains("src")
+  def firstDashIndex = 1
+  return ":" + "${parentDirNames}-${moduleDir.name}-${subModule.name}".substring(firstDashIndex)
 }
 ```
+
+- include: 모듈을 프로젝트에 인식
+- project(projectName).projectDir = subModule: projectName 값을 subModule의 모듈이름으로 인식
+
+`getModuleName()`을 보면 첫 번째 문자를 자르는데, 
+이는 각 모듈의 최상위(여기서는 domain, server, web) 바로 하위에 생기는 모듈의 경우
+최상위 모듈에서 모듈 판별을 하게 되는데, 이때 상위 모듈이 없기 때문에 시작이 `-`로 하게 되기 때문에
+이를 없애고자 한 것 입니다.
 
 위 로직을 통해 해당 폴더가 모듈로써 인식이 됩니다.
-
-이렇게 하면 뎁스 구조로 모듈을 볼 수 있어 좋습니다
-
-> 뎁스 구조가 아닌 그냥 각각을 모듈로써 사용하고 샆다면 `:`대신 `-`를 사용하는 등 구분자를 바꿔주면 됩니다.
->
-> `:`는 모듈의 상하관계를 나타냅니다.
-
-### src 파일 생성
-
-```groovy
-private void makeSrcDir(subModule) {
-
-    ["src/main/java/com/jojiapp/multimoduletest",
-     "src/main/resources",
-     "src/test/java/com/jojiapp/multimoduletest",
-     "src/test/resources"
-    ].forEach(src -> {
-        def srcDir = file(subModule, src)
-        if (!srcDir.exists()) {
-            srcDir.mkdirs()
-        }
-    })
-}
-```
-
-위 로직을 통해 기본적으로 `src` 내에 필요한 폴더를 생성하여 줍니다.
-
-> 하지만 이렇게 한다고 소스 파일로 인식되지 않습니다.
->
-> 소스 파일로써 인식 시킬려면 `build.gradle`에서 `java-library`플러그인을 추가해야 합니다.
 
 ## build.gradle
 
@@ -253,17 +332,17 @@ allprojects {
     apply plugin: boot
     apply plugin: "io.spring.dependency-management"
 
-    group = "com.bomapp"
+    group = "com.jojiapp"
     version = '0.0.1-SNAPSHOT'
     sourceCompatibility = '17'
 
 }
 
 subprojects {
-	repositories {
-	    mavenCentral()
-	}
-	...
+    repositories {
+        mavenCentral()
+    }
+    ...
 }
 ```
 
@@ -272,21 +351,21 @@ subprojects {
 ```groovy
 allprojects {
 
-	apply plugin: "java-library"
+    apply plugin: "java-library"
     apply plugin: boot
     apply plugin: "io.spring.dependency-management"
 
-    group = "com.bomapp"
+    group = "com.jojiapp"
     version = '0.0.1-SNAPSHOT'
     sourceCompatibility = '17'
 
-	repositories {
-	    mavenCentral()
-	}
+    repositories {
+        mavenCentral()
+    }
 }
 
 subprojects {
-	...
+    ...
 }
 ```
 
@@ -294,21 +373,19 @@ subprojects {
 
 ```
 dependencies {
-    implementation ":multi-module-domain:member"
+    implementation ":auto-multi-module-with-gradle-domain-member"
 }
 ```
 
-상위 모듈과 하위 모듈은 `:`통해 표현합니다.
-
-그래서 위 처럼 작성하면 `multi-module-domain` 모듈 안의 `member`을 의미합니다.
-
-그런데 의존성 주입이 되지 않았습니다.
-
+위 처럼 작성을 했더니 의존성 주입이 되지 않았습니다. 
 그 이유는 위 처럼 바로 적는 것이 아닌 `project()`내부에 작성해야 하기 때문이였습니다.
+
+참고로 상위 모듈과 하위 모듈은 `:`통해 표현합니다.
+현재 프로젝트는 상하 관계가 아니기 때문에 `:`가 필요 없습니다.
 
 ```groovy
 dependencies {
-    implementation project(":multi-module-domain:member")
+    implementation project(":auto-multi-module-with-gradle-domain-member")
 }
 ```
 
@@ -332,13 +409,15 @@ dependencies {
 즉, 각 모듈은 상위 모듈과는 별개로 이름이 고유해야 합니다.
 
 - `multi-module-domain`
-    - `member-domain`
+    - `domain-member`
 - `multi-module-web`
-    - `member-web`
+    - `web-member`
 - `multi-module-server`
-    - `member-server`
+    - `server-member`
 
 위 처럼 모듈 이름을 변경하고 나니 정상적으로 빌드가 되었습니다.
+
+상하 관계로 모듈을 사용 시 주의하시기 바랍니다.
 
 ## 참고 사이트
 

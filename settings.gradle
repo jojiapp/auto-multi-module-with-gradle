@@ -1,4 +1,4 @@
-rootProject.name = 'multi-module-test'
+rootProject.name = 'auto-multi-module-with-gradle'
 
 def modules = [
         "domain",
@@ -8,13 +8,13 @@ def modules = [
 
 modules.forEach(module -> {
 
-    def moduleDir = file(rootDir, "${rootProject.name}-${module}")
+    def modulePrefix = rootProject.name
+    def moduleDir = file(rootDir, "${modulePrefix}-${module}")
     if (!moduleDir.exists()) {
         moduleDir.mkdirs()
     }
 
     makeModules(moduleDir)
-
 })
 
 private void makeModules(final File moduleDir, final String parentDirNames = "") {
@@ -25,8 +25,7 @@ private void makeModules(final File moduleDir, final String parentDirNames = "")
         }
 
         if (isModuleDir(subModule)) {
-            makeModules(subModule, "${parentDirNames}:${moduleDir.name}")
-            includeModule(parentDirNames, moduleDir, subModule)
+            makeModules(subModule, "${parentDirNames}-${moduleDir.name}")
             continue
         }
 
@@ -35,6 +34,11 @@ private void makeModules(final File moduleDir, final String parentDirNames = "")
         includeModule(parentDirNames, moduleDir, subModule)
 
     }
+}
+
+private static boolean isModuleDir(final File subModule) {
+
+    return subModule.listFiles().size() != 0 && !subModule.list().contains("src")
 }
 
 private void makeBuildGradleFile(final File subModule) {
@@ -52,15 +56,15 @@ private static String getDefaultGradleSetting() {
 
 bootJar { enabled = false }
 jar { enabled = true }
-
 """
 }
 
 private void makeSrcDir(subModule) {
 
-    ["src/main/java/com/jojiapp/multimoduletest",
+    def group = "com/jojiapp"
+    ["src/main/java/${group}",
      "src/main/resources",
-     "src/test/java/com/jojiapp/multimoduletest",
+     "src/test/java/${group}",
      "src/test/resources"
     ].forEach(src -> {
         def srcDir = file(subModule, src)
@@ -81,13 +85,17 @@ private void includeModule(
         final File subModule
 ) {
 
-    def projectName = "${parentDirNames}:${moduleDir.name}:${subModule.name}"
+    def projectName = getModuleName(parentDirNames, moduleDir, subModule)
     include projectName
     project(projectName).projectDir = subModule
 }
 
-private static boolean isModuleDir(final File subModule) {
+private static String getModuleName(
+        String parentDirNames,
+        File moduleDir,
+        File subModule
+) {
 
-    return subModule.listFiles().size() != 0 && !subModule.list().contains("src")
+    def firstDashIndex = 1
+    return ":" + "${parentDirNames}-${moduleDir.name}-${subModule.name}".substring(firstDashIndex)
 }
-
